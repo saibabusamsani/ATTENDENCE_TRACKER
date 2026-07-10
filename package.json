@@ -48,5 +48,10 @@
   },
   "engines": {
     "node": ">= 22.11.0"
-  }
+  },
+  "codegenConfig": {
+  "name": "NativeCalculatorSpec",
+  "type": "modules",
+  "jsSrcsDir": "./src/specs"
+}
 }
