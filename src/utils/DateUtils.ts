@@ -1,10 +1,4 @@
-// -----------------------------------------------------------------------
-// Single source for all date/time formatting and range math used across
-// the app — screens, hooks, and aggregation all import from here instead
-// of each defining their own local date helpers.
-// -----------------------------------------------------------------------
 
-// Converts a JS Date into the "YYYY-MM-DD" format the API expects.
 export const toDateString = (date: Date): string => date.toISOString().slice(0, 10);
 
 // Converts a 24-hour "HH:mm" string (e.g. "10:56", "19:14") into a
@@ -42,11 +36,6 @@ export const getMonthName = (anyDateInMonth: string): string =>
 // building "YYYY-MM-DD" strings by hand.
 export const pad2 = (value: number): string => String(value).padStart(2, '0');
 
-// -----------------------------------------------------------------------
-// Week-chip helpers — power the "W1 Jan 1-7, W2 Jan 8-14, ..." strip on
-// the Employee Detail screen. Kept here rather than a separate file since
-// they're just more date-range math, same as everything above.
-// -----------------------------------------------------------------------
 export interface WeekChip {
   label: string; // "W1"
   rangeLabel: string; // "Jan 1-7"
@@ -80,4 +69,36 @@ export const getCurrentWeekIndex = (chips: WeekChip[]): number => {
   const todayStr = toDateString(new Date());
   const idx = chips.findIndex((chip) => todayStr >= chip.fromDate && todayStr <= chip.toDate);
   return idx === -1 ? 0 : idx;
+};
+
+export const formatDateTimeToTime = (
+  dateTime: string | undefined,
+  fallback = '--:--',
+): string => {
+  if (!dateTime) return fallback;
+
+  const timePart = dateTime.split('T')[1];
+
+  if (!timePart) return fallback;
+
+  const [hoursStr, minutesStr] = timePart.split(':');
+
+  const hours = Number(hoursStr);
+  const minutes = Number(minutesStr);
+
+  if (
+    Number.isNaN(hours) ||
+    Number.isNaN(minutes) ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59
+  ) {
+    return fallback;
+  }
+
+  const period = hours >= 12 ? 'PM' : 'AM';
+  const hour12 = hours % 12 || 12;
+
+  return `${hour12}:${String(minutes).padStart(2, '0')} ${period}`;
 };

@@ -25,7 +25,7 @@ type EmployeeDetailRouteProp = RouteProp<RootStackParamList, 'EmployeeDetail'>;
 const EmployeeDetailScreen: React.FC = () => {
   const route = useRoute<EmployeeDetailRouteProp>();
   const navigation = useNavigation();
-  const { personCode, fullName, groupName } = route.params;
+  const { personCode, fullName, groupName =""} = route.params;
 
   const today = useMemo(() => new Date(), []);
   const [activeTab, setActiveTab] = useState<PeriodTab>('week');

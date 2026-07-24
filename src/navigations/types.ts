@@ -8,7 +8,7 @@ export type RootStackParamList = {
   EmployeeDetail: {
     personCode: string;
     fullName: string;
-    groupName: string;
+    groupName?: string;
   };
 };
 

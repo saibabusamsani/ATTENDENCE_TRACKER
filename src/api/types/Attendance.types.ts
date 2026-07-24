@@ -66,6 +66,7 @@ export interface AttendanceSummary {
   earlyLogoutCount: number;
   allDevicesSynced: boolean;
   totalCount: number;
+  lastFetchedTime:string
 }
 
 export interface TotalTimeCardListResponse {

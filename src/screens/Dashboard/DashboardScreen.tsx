@@ -10,7 +10,7 @@ import { EmployeeRow } from '../../components/dashboard/EmployeeRow';
 import { COLORS } from '../../constants/Colors';
 import { useAttendance } from '../../hooks/UseAttendance';
 import { useNavigation } from '@react-navigation/native';
-import { toDateString } from '../../utils/DateUtils';
+import {formatDateTimeToTime, toDateString } from '../../utils/DateUtils';
 
 const DashboardScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -28,8 +28,8 @@ const DashboardScreen: React.FC = () => {
     error,
   } = useAttendance({ 
     scope: 'dashboard', 
-    fromDate: selectedDate,  // ✅ Same date for both from and to
-    toDate: selectedDate,    // ✅ Same date for both from and to
+    fromDate: selectedDate, 
+    toDate: selectedDate,   
   });
 
   const todayLabel = useMemo(
@@ -37,13 +37,15 @@ const DashboardScreen: React.FC = () => {
     [],
   );
 
+  const lastUpdated = useMemo(()=>formatDateTimeToTime(attendanceSummary?.lastFetchedTime),[attendanceSummary])
+
   useLayoutEffect(() => {
     navigation.setOptions({
       headerShown: true,
       header: () => (
         <DashboardHeader
           dateLabel={todayLabel}
-          lastUpdated="10:40 AM"
+          lastUpdated={lastUpdated}
           userInitials="VK"
           searchValue={searchInput}
           onSearchChange={setSearchInput}
@@ -52,7 +54,7 @@ const DashboardScreen: React.FC = () => {
         />
       ),
     });
-  }, [navigation, todayLabel, searchInput, selectedDate]);
+  }, [navigation, todayLabel, searchInput, selectedDate,lastUpdated]);
 
   const renderListHeader = useMemo(() => (
     <View style={styles.whiteBodyContainer}>
