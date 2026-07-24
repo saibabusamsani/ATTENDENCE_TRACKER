@@ -1,3 +1,4 @@
+// DashboardScreen.tsx - UPDATED
 import React, { useMemo, useCallback, useLayoutEffect, useState } from 'react';
 import {
   StyleSheet, View, Text, FlatList, ActivityIndicator, ListRenderItem,
@@ -25,7 +26,11 @@ const DashboardScreen: React.FC = () => {
     handleLoadMore,
     summary: attendanceSummary,
     error,
-  } = useAttendance({ scope: 'dashboard', fromDate: selectedDate });
+  } = useAttendance({ 
+    scope: 'dashboard', 
+    fromDate: selectedDate,  // ✅ Same date for both from and to
+    toDate: selectedDate,    // ✅ Same date for both from and to
+  });
 
   const todayLabel = useMemo(
     () => new Date().toLocaleDateString('en-US', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }),

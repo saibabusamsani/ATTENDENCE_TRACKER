@@ -8,19 +8,16 @@ const FIRST_PAGE = 0;
 
 interface Options {
   scope: 'dashboard' | 'employee';
-  personCode?: string; 
+  personCode?: string;
   fromDate?: string;
   toDate?: string;
+  month?: string; // "yyyy-mm" — alternative to fromDate/toDate for month-range queries
 }
 
-// `scope` picks which slot of the store it reads/writes
-export const useAttendance = ({ scope, personCode, fromDate, toDate }: Options) => {
+export const useAttendance = ({ scope, personCode, fromDate, toDate, month }: Options) => {
   const dispatch = useDispatch<AppDispatch>();
   const selector = scope === 'dashboard' ? selectDashboard : selectEmployee;
-  const { records, total, status, error, hasMore, page, summary } = useSelector((s: RootState) => {
-    console.log("store : ",s.attendance)
-    return selector(s)
-});
+  const { records, total, status, error, hasMore, page, summary } = useSelector((s: RootState) => selector(s));
 
   const [searchInput, setSearchInput] = useState('');
   const debouncedSearch = useDebouncedValue(searchInput, 300);
@@ -31,21 +28,21 @@ export const useAttendance = ({ scope, personCode, fromDate, toDate }: Options) 
         fetchAttendanceList({
           scope,
           personCode,
-          date: scope === 'dashboard' ? fromDate : undefined,
-          fromDate: scope === 'employee' ? fromDate : undefined,
-          toDate: scope === 'employee' ? toDate : undefined,
+          fromDate,
+          toDate,
+          month,
           pageNumber,
           searchValue: debouncedSearch || undefined,
         }),
       );
     },
-    [dispatch, scope, personCode, fromDate, toDate, debouncedSearch],
+    [dispatch, scope, personCode, fromDate, toDate, month, debouncedSearch],
   );
 
   useEffect(() => {
     load(FIRST_PAGE);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scope, personCode, fromDate, toDate, debouncedSearch]);
+  }, [scope, personCode, fromDate, toDate, month, debouncedSearch]);
 
   const handleLoadMore = useCallback(() => {
     if (status === 'loading' || status === 'loadingMore' || !hasMore) return;

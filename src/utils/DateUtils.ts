@@ -26,17 +26,6 @@ export const formatTime = (time: string | undefined, fallback = '--:--'): string
   return `${hour12}:${paddedMinutes} ${period}`;
 };
 
-// Monday-to-Sunday range containing the given date ("YYYY-MM-DD" in, "YYYY-MM-DD" out).
-export const getWeekRange = (anyDateInWeek: string): { fromDate: string; toDate: string } => {
-  const d = new Date(anyDateInWeek);
-  const day = d.getDay() || 7; // Sunday -> 7
-  const monday = new Date(d);
-  monday.setDate(d.getDate() - day + 1);
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
-  return { fromDate: toDateString(monday), toDate: toDateString(sunday) };
-};
-
 // 1st-to-last-day range for the month containing the given date.
 export const getMonthRange = (anyDateInMonth: string): { fromDate: string; toDate: string } => {
   const d = new Date(anyDateInMonth);
@@ -45,16 +34,50 @@ export const getMonthRange = (anyDateInMonth: string): { fromDate: string; toDat
   return { fromDate: toDateString(first), toDate: toDateString(last) };
 };
 
-// Inclusive day count between two "YYYY-MM-DD" dates.
-export const daysBetweenInclusive = (fromDate: string, toDate: string): number => {
-  const from = new Date(fromDate);
-  const to = new Date(toDate);
-  return Math.round((to.getTime() - from.getTime()) / 86400000) + 1;
-};
-
 // "July" from a "YYYY-MM-DD" string.
 export const getMonthName = (anyDateInMonth: string): string =>
   new Date(anyDateInMonth).toLocaleDateString('en-US', { month: 'long' });
 
-// 2026 from a "YYYY-MM-DD" string.
-export const getYear = (anyDate: string): number => new Date(anyDate).getFullYear();
+// Left-pads a 1-2 digit number to 2 digits, e.g. 3 -> "03". Used when
+// building "YYYY-MM-DD" strings by hand.
+export const pad2 = (value: number): string => String(value).padStart(2, '0');
+
+// -----------------------------------------------------------------------
+// Week-chip helpers — power the "W1 Jan 1-7, W2 Jan 8-14, ..." strip on
+// the Employee Detail screen. Kept here rather than a separate file since
+// they're just more date-range math, same as everything above.
+// -----------------------------------------------------------------------
+export interface WeekChip {
+  label: string; // "W1"
+  rangeLabel: string; // "Jan 1-7"
+  fromDate: string; // "2024-01-01"
+  toDate: string; // "2024-01-07"
+}
+
+// Splits the given month into consecutive 7-day chunks (last chunk may be
+// shorter), e.g. Jan 2024 -> W1 1-7, W2 8-14, W3 15-21, W4 22-28, W5 29-31.
+export const buildWeekChips = (year: number, month: number): WeekChip[] => {
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const monthShort = new Date(year, month - 1, 1).toLocaleDateString('en-US', { month: 'short' });
+  const chips: WeekChip[] = [];
+
+  for (let startDay = 1, weekIndex = 1; startDay <= daysInMonth; startDay += 7, weekIndex += 1) {
+    const endDay = Math.min(startDay + 6, daysInMonth);
+    chips.push({
+      label: `W${weekIndex}`,
+      rangeLabel: `${monthShort} ${startDay}-${endDay}`,
+      fromDate: `${year}-${pad2(month)}-${pad2(startDay)}`,
+      toDate: `${year}-${pad2(month)}-${pad2(endDay)}`,
+    });
+  }
+
+  return chips;
+};
+
+// Index of the chip containing today's date, or 0 if today isn't in this
+// set of chips (i.e. the visible month isn't the current month).
+export const getCurrentWeekIndex = (chips: WeekChip[]): number => {
+  const todayStr = toDateString(new Date());
+  const idx = chips.findIndex((chip) => todayStr >= chip.fromDate && todayStr <= chip.toDate);
+  return idx === -1 ? 0 : idx;
+};

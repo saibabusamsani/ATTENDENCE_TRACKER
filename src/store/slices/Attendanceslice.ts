@@ -1,3 +1,4 @@
+// AttendanceSlice.ts - UPDATED
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { getTotalTimeCardList } from '../../api/services/AttendanceService';
 import {
@@ -8,10 +9,8 @@ import {
 import { ApiError, parseApiError } from '../../api/ErrorHandler';
 import { RootState } from '../Store';
 
-// ---------------------------------------------------------------------
 // Two screens (Dashboard, Employee Detail) hit the SAME API. `scope` just
 // tells the reducer which slot in state to write the result into.
-// ---------------------------------------------------------------------
 type Scope = 'dashboard' | 'employee';
 type RequestStatus = 'idle' | 'loading' | 'loadingMore' | 'succeeded' | 'failed';
 
@@ -63,10 +62,7 @@ const dedupeAppend = (existing: TotalTimeCardRecord[], incoming: TotalTimeCardRe
   return [...existing, ...unique];
 };
 
-// ---------------------------------------------------------------------
-// ONE thunk. Dashboard calls it with { scope: 'dashboard', date, search },
-// Employee Detail calls it with { scope: 'employee', personCode, fromDate, toDate }.
-// ---------------------------------------------------------------------
+// ONE thunk. Dashboard and Employee Detail both call it with fromDate/toDate.
 type FetchArg = TotalTimeCardListParams & { scope: Scope };
 type ThunkApiConfig = { rejectValue: ApiError };
 
@@ -90,11 +86,9 @@ export const fetchAttendanceList = createAsyncThunk<
   }
 });
 
-// ---------------------------------------------------------------------
 // Slice — logic lives directly in the builder callbacks; `state[scope]`
 // picks dashboard vs. employee, so there's only one pending/fulfilled/
 // rejected case total, not two.
-// ---------------------------------------------------------------------
 const attendanceSlice = createSlice({
   name: 'attendance',
   initialState,

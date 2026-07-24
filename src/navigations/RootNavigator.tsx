@@ -19,8 +19,8 @@ const AppTheme = {
 
 const RootNavigator: React.FC = () => {
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#111E38" />
+    <SafeAreaView style={{ flex: 1 ,backgroundColor:COLORS.primaryDark}} edges={['top']}>
+      <StatusBar barStyle="light-content"/>
       <NavigationContainer theme={AppTheme}>
         <RootStackNavigator />
       </NavigationContainer>

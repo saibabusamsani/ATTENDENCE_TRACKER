@@ -6,6 +6,5 @@ import { TotalTimeCardListParams, TotalTimeCardListResponse } from '../types/Att
 export const getTotalTimeCardList = async (params: TotalTimeCardListParams = {}): Promise<TotalTimeCardListResponse> => {
 
   const response = await axiosInstance.get<TotalTimeCardListResponse>(ATTENDANCE_ENDPOINTS.TOTAL_TIME_CARD_LIST, { params });
-
   return response.data;
 };

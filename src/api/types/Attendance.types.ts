@@ -49,7 +49,7 @@ export const ATTENDANCE_STATUS_MAP: Record<number, string> = {
 
 export interface TotalTimeCardListParams {
   personCode?: string;
-  date?: string;
+  month?: string;
   fromDate?: string;
   toDate?: string;
   pageNumber?: number;

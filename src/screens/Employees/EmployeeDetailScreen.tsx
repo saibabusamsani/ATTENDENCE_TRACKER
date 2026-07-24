@@ -1,159 +1,210 @@
-import React, { useMemo, useCallback, useState } from 'react';
-import {
-  StyleSheet,
-  View,
-  Text,
-  FlatList,
-  ActivityIndicator,
-  ListRenderItem,
-  TouchableOpacity,
-} from 'react-native';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { StyleSheet, View, Text, FlatList, ActivityIndicator, ListRenderItem } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
-import { TotalTimeCardRecord, ATTENDANCE_STATUS_MAP } from '../../api/types/Attendance.types';
+import { TotalTimeCardRecord } from '../../api/types/Attendance.types';
 import { EmployeeHeader } from '../../components/employee/EmployeeHeader';
+import { StatsGrid } from '../../components/dashboard/StatsGrid';
+import {
+  PeriodTab,
+  DailyRecordCard,
+} from '../../components/EmployeeDetailComponents';
 import { COLORS } from '../../constants/Colors';
 import { useAttendance } from '../../hooks/UseAttendance';
-import { useEmployeeAnalytics } from '../../hooks/UseEmployeeAnalytics';
 import { RootStackParamList } from '../../navigations/types';
-import { DashboardAnalyticsCard } from '../../components/dashboard/DashboardAnalyticsCard';
-import { toDateString } from '../../utils/DateUtils';
-import { PeriodSummaryCard } from '../../components/employee/Periodsummarycard';
+import {
+  getMonthName,
+  pad2,
+  buildWeekChips,
+  getCurrentWeekIndex,
+} from '../../utils/DateUtils';
+import { animateLayout } from '../../utils/AnimationUtils';
 
 type EmployeeDetailRouteProp = RouteProp<RootStackParamList, 'EmployeeDetail'>;
-type Tab = 'day' | 'week' | 'month';
 
 const EmployeeDetailScreen: React.FC = () => {
   const route = useRoute<EmployeeDetailRouteProp>();
   const navigation = useNavigation();
   const { personCode, fullName, groupName } = route.params;
 
-  const [selectedDate, setSelectedDate] = useState(toDateString(new Date()));
-  const [activeTab, setActiveTab] = useState<Tab>('day');
+  const today = useMemo(() => new Date(), []);
+  const [activeTab, setActiveTab] = useState<PeriodTab>('week');
+  const [selectedYear, setSelectedYear] = useState(today.getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(today.getMonth() + 1); // 1-12
+  const [selectedWeekIndex, setSelectedWeekIndex] = useState(0);
 
-  const day = useAttendance({ scope: 'employee', personCode, fromDate: selectedDate, toDate: selectedDate });
-  const week = useEmployeeAnalytics(personCode, 'week', selectedDate);
-  const month = useEmployeeAnalytics(personCode, 'month', selectedDate);
+  const weekChips = useMemo(() => buildWeekChips(selectedYear, selectedMonth), [selectedYear, selectedMonth]);
+  const activeWeek = weekChips[Math.min(selectedWeekIndex, weekChips.length - 1)];
 
-  const renderTabBar = useCallback(
-    () => (
-      <View style={styles.tabBar}>
-        {(['day', 'week', 'month'] as Tab[]).map((tab) => (
-          <TouchableOpacity
-            key={tab}
-            style={[styles.tabButton, activeTab === tab && styles.tabButtonActive]}
-            onPress={() => setActiveTab(tab)}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.tabLabel, activeTab === tab && styles.tabLabelActive]}>
-              {tab === 'day' ? 'Day' : tab === 'week' ? 'Week' : 'Month'}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    ),
-    [activeTab],
+  // Whenever the visible month/year changes, snap the pick to today's week
+  // if it's in that month, otherwise the first week.
+  useEffect(() => {
+    setSelectedWeekIndex(getCurrentWeekIndex(weekChips));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedYear, selectedMonth]);
+
+  const { records, isLoading, isRefreshing, error, handleLoadMore, handleRefresh, summary } = useAttendance(
+    activeTab === 'week'
+      ? { scope: 'employee', personCode, fromDate: activeWeek.fromDate, toDate: activeWeek.toDate }
+      : { scope: 'employee', personCode, month: `${selectedYear}-${pad2(selectedMonth)}` },
   );
 
-  const renderAnalyticsForTab = useCallback(() => {
-    if (activeTab === 'day') {
-      return (
-        <DashboardAnalyticsCard
-          summary={day.summary}
-          isLoading={day.isLoading && day.records.length === 0}
-          error={null}
-        />
-      );
-    }
-    const active = activeTab === 'week' ? week : month;
-    return (
-      <PeriodSummaryCard
-        data={active.summary}
-        isLoading={active.isLoading}
-        error={active.error}
-        emptyLabel={`No records for this ${activeTab}`}
-      />
-    );
-  }, [activeTab, day, week, month]);
+  const switchTab = useCallback((tab: PeriodTab) => {
+    animateLayout();
+    setActiveTab(tab);
+  }, []);
 
-  const renderListHeader = useMemo(
-    () => (
-      <View>
+  const selectWeek = useCallback((index: number) => {
+    animateLayout();
+    setSelectedWeekIndex(index);
+  }, []);
+
+  const currentYear = today.getFullYear();
+  const currentMonth = today.getMonth() + 1;
+
+  const changeMonth = useCallback((delta: number) => {
+    setSelectedMonth((prevMonth) => {
+      let month = prevMonth + delta;
+      let year = selectedYear;
+
+      if (month < 1) {
+        month = 12;
+        year -= 1;
+      }
+
+      if (month > 12) {
+        month = 1;
+        year += 1;
+      }
+
+      // Never navigate past the current year-month.
+      const isFuture = year > currentYear || (year === currentYear && month > currentMonth);
+      if (isFuture) return prevMonth;
+
+      animateLayout();
+      setSelectedYear(year);
+      return month;
+    });
+  }, [selectedYear, currentYear, currentMonth]);
+
+  const changeYear = useCallback((delta: number) => {
+    setSelectedYear((prevYear) => {
+      const year = prevYear + delta;
+      if (year > currentYear) return prevYear; // never navigate past the current year
+      animateLayout();
+      return year;
+    });
+  }, [currentYear]);
+
+  // Disable the "next" arrows once already at the current year/month —
+  // there's nothing forward of today to navigate to.
+  const disableYearNext = selectedYear >= currentYear;
+  const disableMonthNext = selectedYear === currentYear && selectedMonth >= currentMonth;
+
+  const periodTitle = activeTab === 'week'
+    ? `${activeWeek.label} Overview`
+    : `${getMonthName(`${selectedYear}-${pad2(selectedMonth)}-01`)} Overview`;
+
+  // EmployeeHeader now owns identity + tab switcher + week/month nav as
+  // one unit — this just passes state through and mounts it as the
+  // actual navigation header, not inside the scrolling list.
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerShown: true,
+      header: () => (
         <EmployeeHeader
           personCode={personCode}
           fullName={fullName}
           groupName={groupName}
-          shiftLabel="Shift 10 AM – 7 PM"
-          selectedDate={selectedDate}
           onBack={() => navigation.goBack()}
-          onSelectDate={setSelectedDate}
+          activeTab={activeTab}
+          onChangeTab={switchTab}
+          weekChips={weekChips}
+          selectedWeekIndex={selectedWeekIndex}
+          onSelectWeek={selectWeek}
+          selectedYear={selectedYear}
+          selectedMonth={selectedMonth}
+          onChangeYear={changeYear}
+          onChangeMonth={changeMonth}
+          disableYearNext={disableYearNext}
+          disableMonthNext={disableMonthNext}
         />
-        {renderTabBar()}
-        {renderAnalyticsForTab()}
+      ),
+    });
+  }, [navigation, personCode, fullName, groupName, activeTab, weekChips, selectedWeekIndex, selectedYear, selectedMonth, switchTab, selectWeek, changeYear, changeMonth, disableYearNext, disableMonthNext]);
+
+  const renderListHeader = () => (
+    <View>
+      <View style={styles.summarySection}>
+        <Text style={styles.summaryTitle}>{periodTitle.toUpperCase()}</Text>
+
+        {isLoading && !summary && (
+          <ActivityIndicator size="small" color={COLORS.primary} style={styles.summaryLoader} />
+        )}
+
+        {!isLoading && error && (
+          <Text style={styles.summaryError}>{error}</Text>
+        )}
+
+        {!isLoading && !error && !summary && (
+          <Text style={styles.summaryEmpty}>{`No records for this ${activeTab}`}</Text>
+        )}
+
+        {summary && <StatsGrid summary={summary} />}
+
+        {activeTab === 'week' ? (
+          <Text style={styles.periodRangeText}>
+            Period: <Text style={styles.periodRangeBold}>{activeWeek.fromDate}</Text> to <Text style={styles.periodRangeBold}>{activeWeek.toDate}</Text>
+          </Text>
+        ) : (
+          <Text style={styles.periodRangeText}>
+            Period: <Text style={styles.periodRangeBold}>{`${selectedYear}-${pad2(selectedMonth)}`}</Text>
+          </Text>
+        )}
       </View>
-    ),
-    [personCode, fullName, groupName, selectedDate, navigation, renderTabBar, renderAnalyticsForTab],
+
+      <View style={styles.sectionHeaderRow}>
+        <Text style={styles.sectionHeaderText}>DAILY RECORDS</Text>
+      </View>
+    </View>
   );
 
-  const renderPunchRow: ListRenderItem<TotalTimeCardRecord> = useCallback(({ item }) => {
-    const statusLabel = ATTENDANCE_STATUS_MAP[item.attendanceStatus] ?? 'Unknown';
-    return (
-      <View style={styles.punchCard}>
-        <View style={styles.punchRowHeader}>
-          <Text style={styles.punchDate}>{item.date}</Text>
-          <Text style={styles.punchStatus}>{statusLabel}</Text>
-        </View>
-        <View style={styles.punchTimeRow}>
-          <View style={styles.punchTimeCol}>
-            <Text style={styles.punchTimeLabel}>Check-in</Text>
-            <Text style={styles.punchTimeValue}>{item.clockInTime || '--:--'}</Text>
-          </View>
-          <View style={styles.punchTimeCol}>
-            <Text style={styles.punchTimeLabel}>Check-out</Text>
-            <Text style={styles.punchTimeValue}>{item.clockOutTime || '--:--'}</Text>
-          </View>
-          <View style={styles.punchTimeCol}>
-            <Text style={styles.punchTimeLabel}>Worked</Text>
-            <Text style={styles.punchTimeValue}>{item.workDuration || '00:00'}</Text>
-          </View>
-        </View>
-      </View>
-    );
-  }, []);
+  const renderPunchRow: ListRenderItem<TotalTimeCardRecord> = useCallback(
+    ({ item }) => <DailyRecordCard record={item} />,
+    [],
+  );
 
-  const renderFooter = useCallback(() => {
-    if (activeTab !== 'day' || !day.isLoading) return null;
+  const renderFooter = () => {
+    if (!isLoading || records.length === 0) return null;
     return (
       <View style={styles.footerLoader}>
         <ActivityIndicator size="small" color={COLORS.primary} />
       </View>
     );
-  }, [activeTab, day.isLoading]);
+  };
 
-  const renderEmpty = useCallback(() => {
-    if (day.isLoading) return null;
+  const renderEmpty = () => {
+    if (isLoading) return null;
     return (
       <View style={styles.emptyState}>
         <Text style={styles.emptyText}>No punch records found</Text>
       </View>
     );
-  }, [day.isLoading]);
-
-  const listData = activeTab === 'day' ? day.records : [];
+  };
 
   return (
     <View style={styles.screenContainer}>
       <FlatList
-        data={listData}
+        data={records}
         renderItem={renderPunchRow}
         keyExtractor={(item) => `${item.personCode}-${item.date}`}
         ListHeaderComponent={renderListHeader}
         ListFooterComponent={renderFooter}
-        ListEmptyComponent={activeTab === 'day' ? renderEmpty : null}
-        onEndReached={activeTab === 'day' ? day.handleLoadMore : undefined}
+        ListEmptyComponent={renderEmpty}
+        onEndReached={handleLoadMore}
         onEndReachedThreshold={0.15}
-        refreshing={activeTab === 'day' ? day.isRefreshing : false}
-        onRefresh={activeTab === 'day' ? day.handleRefresh : undefined}
+        refreshing={isRefreshing}
+        onRefresh={handleRefresh}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollListPadding}
       />
@@ -164,28 +215,71 @@ const EmployeeDetailScreen: React.FC = () => {
 export default EmployeeDetailScreen;
 
 const styles = StyleSheet.create({
-  screenContainer: { flex: 1, backgroundColor: COLORS.background },
-  scrollListPadding: { paddingBottom: 24 },
-  tabBar: {
-    flexDirection: 'row', marginHorizontal: 16, marginTop: 16,
-    backgroundColor: COLORS.surface, borderRadius: 12, borderWidth: 1, borderColor: COLORS.border, padding: 4,
+  screenContainer: {
+    flex: 1,
+    backgroundColor: COLORS.background,
   },
-  tabButton: { flex: 1, paddingVertical: 8, borderRadius: 9, alignItems: 'center' },
-  tabButtonActive: { backgroundColor: COLORS.primary },
-  tabLabel: { fontSize: 12, fontWeight: '700', color: COLORS.textSecondary },
-  tabLabelActive: { color: COLORS.textInverse },
-  punchCard: {
-    backgroundColor: COLORS.surface, borderRadius: 14, padding: 14,
-    marginHorizontal: 16, marginTop: 12, borderWidth: 1, borderColor: COLORS.border,
+  scrollListPadding: {
+    paddingBottom: 24,
   },
-  punchRowHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
-  punchDate: { fontSize: 13, fontWeight: '700', color: COLORS.textPrimary },
-  punchStatus: { fontSize: 12, fontWeight: '600', color: COLORS.success },
-  punchTimeRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  punchTimeCol: { alignItems: 'flex-start' },
-  punchTimeLabel: { fontSize: 11, color: COLORS.textSecondary, marginBottom: 3 },
-  punchTimeValue: { fontSize: 14, fontWeight: '700', color: COLORS.textPrimary },
-  footerLoader: { paddingVertical: 16, alignItems: 'center' },
-  emptyState: { paddingVertical: 40, alignItems: 'center' },
-  emptyText: { fontSize: 13, color: COLORS.textMuted },
+  summarySection: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 16,
+  },
+  summaryTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: COLORS.textPrimary,
+    letterSpacing: 0.3,
+    marginBottom: 12,
+  },
+  summaryLoader: {
+    marginVertical: 16,
+  },
+  summaryError: {
+    fontSize: 12,
+    color: COLORS.danger,
+  },
+  summaryEmpty: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+  },
+  periodRangeText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  periodRangeBold: {
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  sectionHeaderRow: {
+    marginHorizontal: 16,
+    marginTop: 20,
+    marginBottom: 4,
+  },
+  sectionHeaderText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: COLORS.textPrimary,
+    letterSpacing: 0.3,
+  },
+  footerLoader: {
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  emptyState: {
+    paddingVertical: 40,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+  },
 });
